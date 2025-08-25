@@ -1,0 +1,12 @@
+export const getString = () => 'hello';
+export const getNumber = () => 1;
+export const getDate = () => new Date('2025-08-25');
+export const getDateString = () => new Date('2025-08-25').toString();
+export const getArray = () => [1, 2, 3];
+export const getObject = () => ({ a: 1, b: 2 });
+export const getBoolean = () => true;
+export const getNull = () => null;
+export const getUndefined = () => undefined;
+export const getSymbol = () => Symbol('symbol');
+export const getBigInt = () => BigInt(1);
+export const getFunction = () => () => {};
