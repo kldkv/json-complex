@@ -89,7 +89,8 @@ function ensureDirectoryExists(dirPath) {
 function resolveOutputPath(inputFilePath, outDir, ext = 'json') {
   const extension = ext.startsWith('.') ? ext : `.${ext}`;
   const baseName = path.basename(inputFilePath, path.extname(inputFilePath));
-  const targetDir = outDir || path.join(path.dirname(inputFilePath), '_generated_json');
+  const targetDir =
+    outDir || path.join(path.dirname(inputFilePath), '_generated_json');
   ensureDirectoryExists(targetDir);
   return path.join(targetDir, `${baseName}${extension}`);
 }
@@ -189,7 +190,8 @@ function astToLiteral(node) {
       const obj = {};
       for (const prop of node.properties) {
         if (prop.type !== 'ObjectProperty') continue;
-        const key = prop.key.type === 'Identifier' ? prop.key.name : prop.key.value;
+        const key =
+          prop.key.type === 'Identifier' ? prop.key.name : prop.key.value;
         obj[key] = astToLiteral(prop.value);
       }
       return obj;
@@ -237,7 +239,8 @@ function extractMetaFromSource(source) {
         const init = locals.get(localName);
         if (!init) continue;
         if (exportedName === 'name') meta.name = astToLiteral(init);
-        if (exportedName === 'description') meta.description = astToLiteral(init);
+        if (exportedName === 'description')
+          meta.description = astToLiteral(init);
         if (exportedName === 'data') meta.data = astToLiteral(init);
       }
     }
@@ -262,10 +265,13 @@ function valueToAstNode(value) {
   if (type === 'number') return t.numericLiteral(value);
   if (type === 'boolean') return t.booleanLiteral(value);
   if (value === null) return t.nullLiteral();
-  if (Array.isArray(value)) return t.arrayExpression(value.map((v) => valueToAstNode(v)));
+  if (Array.isArray(value))
+    return t.arrayExpression(value.map((v) => valueToAstNode(v)));
   if (value && type === 'object') {
     return t.objectExpression(
-      Object.entries(value).map(([k, v]) => t.objectProperty(t.stringLiteral(k), valueToAstNode(v)))
+      Object.entries(value).map(([k, v]) =>
+        t.objectProperty(t.stringLiteral(k), valueToAstNode(v)),
+      ),
     );
   }
   return null;
@@ -289,7 +295,10 @@ function collectTopLevelLiterals(source) {
 
 function inlineSimpleIdentifiersInJsx(jsxCode, literalsMap) {
   try {
-    const program = babelParser.parse(`const __x = ${jsxCode};`, { sourceType: 'module', plugins: ['jsx'] });
+    const program = babelParser.parse(`const __x = ${jsxCode};`, {
+      sourceType: 'module',
+      plugins: ['jsx'],
+    });
     const decl = program.program.body[0];
     traverse(program, {
       JSXExpressionContainer(path) {
@@ -306,15 +315,16 @@ function inlineSimpleIdentifiersInJsx(jsxCode, literalsMap) {
     for (const [k, v] of literalsMap.entries()) {
       if (v === undefined) continue;
       const pattern = new RegExp(`\\{\\s*${k}\\s*\\}`, 'g');
-      const replacement = typeof v === 'string'
-        ? `{${JSON.stringify(v)}}`
-        : typeof v === 'number'
-          ? `{${String(v)}}`
-          : typeof v === 'boolean'
-            ? `{${v ? 'true' : 'false'}}`
-            : v === null
-              ? `{null}`
-              : undefined;
+      const replacement =
+        typeof v === 'string'
+          ? `{${JSON.stringify(v)}}`
+          : typeof v === 'number'
+            ? `{${String(v)}}`
+            : typeof v === 'boolean'
+              ? `{${v ? 'true' : 'false'}}`
+              : v === null
+                ? `{null}`
+                : undefined;
       if (replacement !== undefined) out = out.replace(pattern, replacement);
     }
     return out;
@@ -333,8 +343,10 @@ async function loadTransformer() {
     if (!fs.existsSync(p)) continue;
     try {
       const mod = await import(pathToFileURL(p).href);
-      if (mod && typeof mod.transoformWithLogic === 'function') return mod.transoformWithLogic;
-      if (mod && mod.default && typeof mod.default.someFn === 'function') return mod.default.someFn;
+      if (mod && typeof mod.transoformWithLogic === 'function')
+        return mod.transoformWithLogic;
+      if (mod && mod.default && typeof mod.default.someFn === 'function')
+        return mod.default.someFn;
     } catch (_) {
       // try next
     }
@@ -343,10 +355,7 @@ async function loadTransformer() {
 }
 
 async function generateForFile(inputFilePath, options, transformer) {
-  const {
-    outDir,
-    ext = 'json',
-  } = options;
+  const { outDir, ext = 'json' } = options;
   const source = fs.readFileSync(inputFilePath, 'utf8');
   const jsx = extractRootJsxFromSource(source);
   if (!jsx) throw new Error(`В файле не найден JSX: ${inputFilePath}`);
@@ -357,9 +366,12 @@ async function generateForFile(inputFilePath, options, transformer) {
   const stat = fs.statSync(inputFilePath);
   const meta = extractMetaFromSource(source);
   const root = {
-    name: meta.name ?? path.basename(inputFilePath, path.extname(inputFilePath)),
+    name:
+      meta.name ?? path.basename(inputFilePath, path.extname(inputFilePath)),
     lastModified: stat.mtime.toISOString(),
-    ...(meta.description !== undefined ? { description: meta.description } : {}),
+    ...(meta.description !== undefined
+      ? { description: meta.description }
+      : {}),
     ...(meta.data !== undefined ? { data: meta.data } : {}),
     [options.key || 'content']: json,
   };
@@ -377,11 +389,16 @@ async function generateForDirectory(baseDir, options, transformer) {
     recursive = false,
   } = options;
   const fileRegex = compileFileRegex(pattern);
-  const files = (recursive ? listFilesRecursive(baseDir) : listFilesShallow(baseDir))
-    .filter((fullPath) => fileRegex.test(path.basename(fullPath)));
+  const files = (
+    recursive ? listFilesRecursive(baseDir) : listFilesShallow(baseDir)
+  ).filter((fullPath) => fileRegex.test(path.basename(fullPath)));
   const outputs = [];
   for (const full of files) {
-    const out = await generateForFile(full, { outDir, ext, key: options.key }, transformer);
+    const out = await generateForFile(
+      full,
+      { outDir, ext, key: options.key },
+      transformer,
+    );
     outputs.push(out);
   }
   return outputs;
@@ -389,8 +406,13 @@ async function generateForDirectory(baseDir, options, transformer) {
 
 function watchPath(inputPath, options, onChange) {
   const watchGlobs = fs.statSync(inputPath).isFile()
-    ? [inputPath, path.join(path.dirname(inputPath), '**/*.{js,ts,jsx,tsx}')] 
-    : [path.join(inputPath, options.recursive ? '**/*.{js,ts,jsx,tsx}' : '*.{js,ts,jsx,tsx}')];
+    ? [inputPath, path.join(path.dirname(inputPath), '**/*.{js,ts,jsx,tsx}')]
+    : [
+        path.join(
+          inputPath,
+          options.recursive ? '**/*.{js,ts,jsx,tsx}' : '*.{js,ts,jsx,tsx}',
+        ),
+      ];
 
   const watcher = chokidar.watch(watchGlobs, {
     ignoreInitial: true,
@@ -459,7 +481,11 @@ function watchPath(inputPath, options, onChange) {
         // eslint-disable-next-line no-console
         console.log(outPath);
       } else {
-        const outputs = await generateForDirectory(inputPath, options, transformer);
+        const outputs = await generateForDirectory(
+          inputPath,
+          options,
+          transformer,
+        );
         // eslint-disable-next-line no-console
         outputs.forEach((p) => console.log(p));
       }
@@ -479,5 +505,3 @@ function watchPath(inputPath, options, onChange) {
     });
   }
 })();
-
-

@@ -23,12 +23,15 @@
     "@babel/types": "^7.28.2",
     "chokidar": "3.6.0",
     "json-logic-js": "^2.0.5",
-    "remeda": "^2.30.0"
+    "react": "^19.1.1",
+    "remeda": "^2.30.0",
+    "secure-json-parse": "^4.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.28.3",
     "@types/mustache": "4.2.6",
     "@types/node": "22.17.2",
+    "@types/react": "^19.1.11",
     "eta": "^3.5.0",
     "liquidjs": "^10.21.1",
     "mustache": "4.2.0",

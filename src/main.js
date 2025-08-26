@@ -265,7 +265,10 @@ function buildCaseContext(caseFilePath) {
   try {
     const abs = path.resolve(caseFilePath);
     const src = fs.readFileSync(abs, 'utf8');
-    const ast = parse(src, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+    const ast = parse(src, {
+      sourceType: 'module',
+      plugins: ['jsx', 'typescript'],
+    });
     // импортируемые функции/константы из utils и др.
     for (const node of ast.program.body) {
       if (node.type === 'ImportDeclaration') {
