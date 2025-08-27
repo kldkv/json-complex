@@ -115,6 +115,51 @@ describe('Perf: сравнение с mustache', () => {
     const sqrlTime = nowMs() - t5;
     record('Squirrelly', sqrlTime);
 
+    // Кэшируемые сценарии (одна и та же строка на всех итерациях)
+    // mustache (один и тот же шаблон, должен использовать внутренний кэш парсинга)
+    const t6 = nowMs();
+    for (let i = 0; i < ITERATIONS; i++) {
+      mustache.render(baseTemplate, data as any);
+    }
+    const mustacheCachedTime = nowMs() - t6;
+    record('mustache (cached)', mustacheCachedTime);
+
+    // наша реализация (один и тот же шаблон)
+    const t7 = nowMs();
+    for (let i = 0; i < ITERATIONS; i++) {
+      custom(baseTemplate, data as any);
+    }
+    const customCachedTime = nowMs() - t7;
+    record('custom (cached)', customCachedTime);
+
+    // LiquidJS с включённым кэшем парсинга
+    const liquidCached = new Liquid({ cache: true });
+    const t8 = nowMs();
+    for (let i = 0; i < ITERATIONS; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await liquidCached.parseAndRender(liquidBase, data as any);
+    }
+    const liquidCachedTime = nowMs() - t8;
+    record('LiquidJS (cached)', liquidCachedTime);
+
+    // Eta: компилируем один раз и исполняем много раз
+    const etaCompiled = etaEngine.compile(etaBase).bind(etaEngine);
+    const t9 = nowMs();
+    for (let i = 0; i < ITERATIONS; i++) {
+      etaCompiled(data as any);
+    }
+    const etaCachedTime = nowMs() - t9;
+    record('Eta (cached)', etaCachedTime);
+
+    // Squirrelly: компилируем один раз и исполняем много раз
+    const sqrlCompiled = Sqrl.compile(sqrlBase);
+    const t10 = nowMs();
+    for (let i = 0; i < ITERATIONS; i++) {
+      sqrlCompiled(data as any, Sqrl.defaultConfig);
+    }
+    const sqrlCachedTime = nowMs() - t10;
+    record('Squirrelly (cached)', sqrlCachedTime);
+
     printSummary();
   });
 });

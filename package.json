@@ -22,6 +22,7 @@
     "@babel/parser": "^7.28.3",
     "@babel/traverse": "^7.28.3",
     "@babel/types": "^7.28.2",
+    "@types/json-logic-js": "^2.0.8",
     "antd": "^5.27.1",
     "chokidar": "3.6.0",
     "json-logic-js": "^2.0.5",

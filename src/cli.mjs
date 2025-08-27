@@ -3,14 +3,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import chokidar from 'chokidar';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import * as babelParser from '@babel/parser';
-import traverseModule from '@babel/traverse';
-import generateModule from '@babel/generator';
-import * as t from '@babel/types';
-
-const traverse = traverseModule.default || traverseModule;
-const generate = generateModule.default || generateModule;
+import transformTsxToJson from './convert.mjs';
 
 function printUsage() {
   const usage = `Usage: jsx-json-logic [options]
@@ -21,7 +16,6 @@ Options:
   -e, --ext <ext>          Расширение результата (по умолчанию json)
   -p, --pattern <regex>    Фильтр файлов при обработке директории (по умолчанию ([tj])sx$)
   -r, --recursive          Рекурсивно обходить директории
-  -k, --key <name>         Имя свойства для результата (по умолчанию content)
   -w, --watch              Наблюдение за изменениями и авто-перегенерация
   -h, --help               Показать справку
 
@@ -63,7 +57,8 @@ function parseArgs(argv) {
         break;
       case '-k':
       case '--key':
-        args.key = argv[++i];
+        // Параметр больше не используется, пропускаем значение для совместимости
+        i += 1;
         break;
       case '-w':
       case '--watch':
@@ -87,9 +82,9 @@ function ensureDirectoryExists(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function resolveOutputPath(inputFilePath, outDir, ext = 'json') {
+function resolveOutputPath(inputFilePath, outDir, ext = 'json', baseNameOverride) {
   const extension = ext.startsWith('.') ? ext : `.${ext}`;
-  const baseName = path.basename(inputFilePath, path.extname(inputFilePath));
+  const baseName = baseNameOverride || path.basename(inputFilePath, path.extname(inputFilePath));
   const targetDir =
     outDir || path.join(path.dirname(inputFilePath), '_generated_json');
   ensureDirectoryExists(targetDir);
@@ -136,32 +131,7 @@ function parseModule(source) {
   });
 }
 
-function extractRootJsxFromSource(source) {
-  const ast = parseModule(source);
-  let rootNode = null;
-  traverse(ast, {
-    JSXElement(path) {
-      if (
-        path.parent?.type === 'JSXElement' ||
-        path.parent?.type === 'JSXFragment'
-      ) {
-        return;
-      }
-      if (!rootNode) rootNode = path.node;
-    },
-    JSXFragment(path) {
-      if (
-        path.parent?.type === 'JSXElement' ||
-        path.parent?.type === 'JSXFragment'
-      ) {
-        return;
-      }
-      if (!rootNode) rootNode = path.node;
-    },
-  });
-  if (!rootNode) return null;
-  return generate(rootNode).code;
-}
+// Из convert.mjs мы формируем JSON целиком, поэтому выделять корневой JSX не требуется
 
 function astToLiteral(node) {
   if (!node) return undefined;
@@ -259,121 +229,24 @@ async function formatJsonWithPrettier(jsonText, outputPath) {
   }
 }
 
-function valueToAstNode(value) {
-  const type = typeof value;
-  if (type === 'string') return t.stringLiteral(value);
-  if (type === 'number') return t.numericLiteral(value);
-  if (type === 'boolean') return t.booleanLiteral(value);
-  if (value === null) return t.nullLiteral();
-  if (Array.isArray(value))
-    return t.arrayExpression(value.map((v) => valueToAstNode(v)));
-  if (value && type === 'object') {
-    return t.objectExpression(
-      Object.entries(value).map(([k, v]) =>
-        t.objectProperty(t.stringLiteral(k), valueToAstNode(v)),
-      ),
-    );
-  }
-  return null;
-}
+// Упростили пайплайн: инлайнинг и преобразование выполняются в convert.mjs
 
-function collectTopLevelLiterals(source) {
-  const ast = parseModule(source);
-  const map = new Map();
-  for (const node of ast.program.body) {
-    if (node.type === 'VariableDeclaration') {
-      for (const decl of node.declarations) {
-        if (decl.id?.type === 'Identifier' && decl.init) {
-          const v = astToLiteral(decl.init);
-          if (v !== undefined) map.set(decl.id.name, v);
-        }
-      }
-    }
-  }
-  return map;
-}
+// Больше не нужен внешний загрузчик трансформера
 
-function inlineSimpleIdentifiersInJsx(jsxCode, literalsMap) {
-  try {
-    const program = babelParser.parse(`const __x = ${jsxCode};`, {
-      sourceType: 'module',
-      plugins: ['jsx'],
-    });
-    const decl = program.program.body[0];
-    traverse(program, {
-      JSXExpressionContainer(path) {
-        const expr = path.node.expression;
-        if (!expr || expr.type !== 'Identifier') return;
-        const name = expr.name;
-        if (!literalsMap.has(name)) return;
-        const node = valueToAstNode(literalsMap.get(name));
-        if (node) path.node.expression = node;
-      },
-    });
-    let out = generate(decl.declarations[0].init).code;
-    // Fallback: строковая подстановка {IDENT} -> {literal}
-    for (const [k, v] of literalsMap.entries()) {
-      if (v === undefined) continue;
-      const pattern = new RegExp(`\\{\\s*${k}\\s*\\}`, 'g');
-      const replacement =
-        typeof v === 'string'
-          ? `{${JSON.stringify(v)}}`
-          : typeof v === 'number'
-            ? `{${String(v)}}`
-            : typeof v === 'boolean'
-              ? `{${v ? 'true' : 'false'}}`
-              : v === null
-                ? `{null}`
-                : undefined;
-      if (replacement !== undefined) out = out.replace(pattern, replacement);
-    }
-    return out;
-  } catch (_) {
-    return jsxCode;
-  }
-}
-
-async function loadTransformer() {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    path.resolve(here, 'main.js'),
-    path.resolve(here, 'main.mjs'),
-  ];
-  for (const p of candidates) {
-    if (!fs.existsSync(p)) continue;
-    try {
-      const mod = await import(pathToFileURL(p).href);
-      if (mod && typeof mod.transoformWithLogic === 'function')
-        return mod.transoformWithLogic;
-      if (mod && mod.default && typeof mod.default.someFn === 'function')
-        return mod.default.someFn;
-    } catch (_) {
-      // try next
-    }
-  }
-  throw new Error('Не удалось загрузить трансформер из src/main.mjs|main.js');
-}
-
-async function generateForFile(inputFilePath, options, transformer) {
+async function generateForFile(inputFilePath, options) {
   const { outDir, ext = 'json' } = options;
   const source = fs.readFileSync(inputFilePath, 'utf8');
-  const jsx = extractRootJsxFromSource(source);
-  if (!jsx) throw new Error(`В файле не найден JSX: ${inputFilePath}`);
-  const literals = collectTopLevelLiterals(source);
-  const jsxInlined = inlineSimpleIdentifiersInJsx(jsx, literals);
-  const json = await transformer(jsxInlined, inputFilePath);
-  const outputPath = resolveOutputPath(inputFilePath, outDir, ext);
+  const json = await transformTsxToJson(source, inputFilePath);
   const stat = fs.statSync(inputFilePath);
   const meta = extractMetaFromSource(source);
+  const fileBase = meta.name ?? path.basename(inputFilePath, path.extname(inputFilePath));
+  const outputPath = resolveOutputPath(inputFilePath, outDir, ext, fileBase);
   const root = {
-    name:
-      meta.name ?? path.basename(inputFilePath, path.extname(inputFilePath)),
+    name: fileBase,
     lastModified: stat.mtime.toISOString(),
-    ...(meta.description !== undefined
-      ? { description: meta.description }
-      : {}),
+    ...(meta.description !== undefined ? { description: meta.description } : {}),
     ...(meta.data !== undefined ? { data: meta.data } : {}),
-    [options.key || 'content']: json,
+    ...json,
   };
   const raw = JSON.stringify(root, null, 2);
   const formatted = await formatJsonWithPrettier(raw, outputPath);
@@ -381,9 +254,9 @@ async function generateForFile(inputFilePath, options, transformer) {
   return outputPath;
 }
 
-async function generateForDirectory(baseDir, options, transformer) {
+async function generateForDirectory(baseDir, options) {
   const {
-    pattern = '([tj])sx$',
+    pattern = 'tsx$',
     outDir,
     ext = 'json',
     recursive = false,
@@ -397,7 +270,6 @@ async function generateForDirectory(baseDir, options, transformer) {
     const out = await generateForFile(
       full,
       { outDir, ext, key: options.key },
-      transformer,
     );
     outputs.push(out);
   }
@@ -459,32 +331,21 @@ function watchPath(inputPath, options, onChange) {
   const options = {
     outDir: parsed.outDir,
     ext: parsed.ext || 'json',
-    pattern: parsed.pattern || '([tj])sx$',
+    pattern: parsed.pattern || 'tsx$',
     recursive: Boolean(parsed.recursive),
-    key: parsed.key || 'content',
     watch: Boolean(parsed.watch),
   };
-
-  let transformer;
-  try {
-    transformer = await loadTransformer();
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(err.message || err);
-    process.exit(1);
-  }
 
   async function runOnce() {
     try {
       if (fs.statSync(inputPath).isFile()) {
-        const outPath = await generateForFile(inputPath, options, transformer);
+        const outPath = await generateForFile(inputPath, options);
         // eslint-disable-next-line no-console
         console.log(outPath);
       } else {
         const outputs = await generateForDirectory(
           inputPath,
           options,
-          transformer,
         );
         // eslint-disable-next-line no-console
         outputs.forEach((p) => console.log(p));
@@ -500,8 +361,24 @@ function watchPath(inputPath, options, onChange) {
   if (options.watch) {
     // eslint-disable-next-line no-console
     console.log('Watching for changes...');
-    watchPath(inputPath, options, async () => {
-      await runOnce();
+    const fileRegex = compileFileRegex(options.pattern || 'tsx$');
+    watchPath(inputPath, options, async (_evt, changedPath) => {
+      try {
+        const stat = fs.existsSync(inputPath) ? fs.statSync(inputPath) : null;
+        if (stat && stat.isFile()) {
+          const out = await generateForFile(inputPath, options);
+          // eslint-disable-next-line no-console
+          console.log(out);
+          return;
+        }
+        if (!changedPath || !fileRegex.test(path.basename(changedPath))) return;
+        const out = await generateForFile(changedPath, options);
+        // eslint-disable-next-line no-console
+        console.log(out);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(err.message || err);
+      }
     });
   }
 })();

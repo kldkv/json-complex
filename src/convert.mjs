@@ -1,44 +1,107 @@
-import { transformSync } from '@babel/core';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse } from '@babel/parser';
-import generate from '@babel/generator';
 import { pathToFileURL } from 'node:url';
-
-// 1) Прочитаем исходник (TSX)
-const sourcePath = './src/mainCases/realLife.tsx';
-const sourceCode = fs.readFileSync(sourcePath, 'utf-8');
-
-// 2) Разберём AST исходного TSX, чтобы извлечь JSX для ui
-const ast = parse(sourceCode, {
-  sourceType: 'module',
-  plugins: ['jsx', 'typescript', 'optionalChaining', 'nullishCoalescingOperator', 'logicalAssignment'],
-});
+import { transformJsToJsonLogic as builtinTransformJsToJsonLogic } from './transformJsToJsonLogic/index.mjs';
 
 async function buildImportsScope(program, filePath) {
   const imports = new Map();
   const fileDir = path.dirname(path.resolve(filePath));
+
+  function emulateTsModule(absBase) {
+    const tsCandidates = [
+      `${absBase}.ts`,
+      `${absBase}.tsx`,
+      path.join(absBase, 'index.ts'),
+      path.join(absBase, 'index.tsx'),
+    ];
+    let tsPath = null;
+    for (const c of tsCandidates) {
+      if (fs.existsSync(c) && fs.statSync(c).isFile()) {
+        tsPath = c;
+        break;
+      }
+    }
+    if (!tsPath) return null;
+    try {
+      const src = fs.readFileSync(tsPath, 'utf8');
+      const ast = parse(src, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+      const mod = {};
+      for (const node of ast.program.body) {
+        if (node.type === 'ExportNamedDeclaration' && node.declaration) {
+          if (node.declaration.type === 'VariableDeclaration') {
+            for (const d of node.declaration.declarations) {
+              if (d.id.type === 'Identifier' && d.init) {
+                if (d.init.type === 'ArrowFunctionExpression' && d.init.params.length === 0) {
+                  const bodyNode = d.init.body;
+                  mod[d.id.name] = () => evaluateExpression(bodyNode, new Map(), null);
+                }
+              }
+            }
+          } else if (node.declaration.type === 'FunctionDeclaration') {
+            const d = node.declaration;
+            if (d.id && d.id.type === 'Identifier' && d.params.length === 0) {
+              // Поддерживаем только возврат одного выражения
+              const ret = d.body.body.find((s) => s.type === 'ReturnStatement');
+              if (ret) mod[d.id.name] = () => evaluateExpression(ret.argument, new Map(), null);
+            }
+          }
+        }
+      }
+      return mod;
+    } catch {
+      return null;
+    }
+  }
   for (const node of program.body) {
     if (node.type !== 'ImportDeclaration') continue;
     const source = node.source.value;
     // Игнорируем только React-рантайм, он не нужен для вычисления выражений
     if (source === 'react' || source === 'react/jsx-dev-runtime') continue;
 
-    try {
-      const mod = source.startsWith('.')
-        ? await import(pathToFileURL(path.resolve(fileDir, source)).href)
-        : await import(source);
-      for (const s of node.specifiers) {
-        if (s.type === 'ImportSpecifier') {
-          imports.set(s.local.name, mod[s.imported.name]);
-        } else if (s.type === 'ImportDefaultSpecifier') {
-          imports.set(s.local.name, mod.default);
-        } else if (s.type === 'ImportNamespaceSpecifier') {
-          imports.set(s.local.name, mod);
+    const tryImport = async () => {
+      // Пытаемся аккуратно разрешить расширения и index.* для локальных путей
+      if (source.startsWith('.')) {
+        const absBase = path.resolve(fileDir, source);
+        const candidates = [
+          absBase,
+          `${absBase}.mjs`,
+          `${absBase}.js`,
+          path.join(absBase, 'index.mjs'),
+          path.join(absBase, 'index.js'),
+        ];
+        for (const c of candidates) {
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            return await import(pathToFileURL(c).href);
+          } catch {
+            // пробуем следующий кандидат
+          }
         }
+        return null;
       }
-    } catch {
-      // Если модуль не удалось импортировать (например, среда без пакета), пропускаем
+      // Внешние модули пробуем как есть
+      try {
+        return await import(source);
+      } catch {
+        return null;
+      }
+    };
+
+    let mod = await tryImport();
+    if (!mod && source.startsWith('.')) {
+      const absBase = path.resolve(fileDir, source);
+      mod = emulateTsModule(absBase);
+    }
+    if (!mod) continue;
+    for (const s of node.specifiers) {
+      if (s.type === 'ImportSpecifier') {
+        imports.set(s.local.name, mod[s.imported.name]);
+      } else if (s.type === 'ImportDefaultSpecifier') {
+        imports.set(s.local.name, mod.default);
+      } else if (s.type === 'ImportNamespaceSpecifier') {
+        imports.set(s.local.name, mod);
+      }
     }
   }
   return imports;
@@ -202,6 +265,14 @@ function evaluateExpression(node, scope, imports) {
       const args = node.arguments.map((a) => evaluateExpression(a, scope, imports));
       if (typeof callee === 'function') {
         return callee(...args);
+      }
+      // Специальный фоллбек для transformJsToJsonLogic, если не удалось резолвить импорт
+      if (node.callee.type === 'Identifier' && node.callee.name === 'transformJsToJsonLogic') {
+        try {
+          return builtinTransformJsToJsonLogic(args[0]);
+        } catch {
+          return undefined;
+        }
       }
       return undefined;
     }
@@ -423,12 +494,6 @@ function findFirstJsx(program) {
   return null;
 }
 
-const importsScope = await buildImportsScope(ast.program, sourcePath);
-const topLevelScope = buildTopLevelConstScope(ast.program, importsScope);
-const defaultJsx = findDefaultJsx(ast.program);
-const ui = defaultJsx ? convertJsxElementToJson(defaultJsx, topLevelScope, importsScope) : undefined;
-
-// Поиск именованных экспортов-React элементов, чтобы позволить менять ключ (например, block)
 function findNamedJsxExports(program) {
   const out = {};
   for (const node of program.body) {
@@ -445,93 +510,41 @@ function findNamedJsxExports(program) {
   }
   return out;
 }
+export default async function transformTsxToJson(sourceCode, filePath) {
+  // Разбор AST и подготовка scope
+  const ast = parse(sourceCode, {
+    sourceType: 'module',
+    plugins: ['jsx', 'typescript', 'optionalChaining', 'nullishCoalescingOperator', 'logicalAssignment'],
+  });
 
-const namedJsxExports = findNamedJsxExports(ast.program);
-// Примонтируем именованные JSX константы в scope, чтобы их можно было использовать в props как идентификаторы
-for (const [key, jsxNode] of Object.entries(namedJsxExports)) {
-  if (!topLevelScope.has(key)) {
-    topLevelScope.set(key, convertJsxElementToJson(jsxNode, topLevelScope, importsScope));
-  }
-}
+  const importsScope = await buildImportsScope(ast.program, filePath);
+  const topLevelScope = buildTopLevelConstScope(ast.program, importsScope);
 
-// 3) Подготовим код для вычисления ИМЕНОВАННЫХ экспортов без UI-зависимостей
-//    - удалим export default
-//    - удалим импорт из 'antd' и 'react', т.к. они нужны только для JSX
-const evalAst = parse(sourceCode, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+  // Найдём default JSX и именованные JSX-экспорты
+  const defaultJsx = findDefaultJsx(ast.program);
+  const namedJsxExports = findNamedJsxExports(ast.program);
 
-function containsJsx(n) {
-  let has = false;
-  const stack = [n];
-  while (stack.length) {
-    const curr = stack.pop();
-    if (!curr || has) continue;
-    if (curr.type === 'JSXElement' || curr.type === 'JSXFragment') { has = true; break; }
-    for (const key in curr) {
-      const v = curr[key];
-      if (v && typeof v === 'object') {
-        if (Array.isArray(v)) stack.push(...v);
-        else stack.push(v);
-      }
+  // Примонтируем именованные JSX-экспорты в scope, чтобы их можно было использовать по идентификатору
+  for (const [key, jsxNode] of Object.entries(namedJsxExports)) {
+    if (!topLevelScope.has(key)) {
+      topLevelScope.set(key, convertJsxElementToJson(jsxNode, topLevelScope, importsScope));
     }
   }
-  return has;
-}
 
-evalAst.program.body = evalAst.program.body.flatMap((node) => {
-  if (node.type === 'ExportDefaultDeclaration') return [];
-  if (node.type === 'ImportDeclaration') {
-    const src = node.source.value;
-    if (src === 'react' || src === 'react/jsx-dev-runtime') return [];
-    return [node];
+  // Сформируем результат
+  const result = {};
+
+  // export default → ui
+  if (defaultJsx) {
+    result.ui = convertJsxElementToJson(defaultJsx, topLevelScope, importsScope);
   }
-  if (node.type === 'VariableDeclaration') {
-    const decls = node.declarations.filter((d) => !containsJsx(d.init));
-    if (decls.length === 0) return [];
-    return [{ ...node, declarations: decls }];
+
+  // все именованные JSX-константы
+  for (const [key, jsxNode] of Object.entries(namedJsxExports)) {
+    if (key === '_expected' || key.startsWith('_')) continue;
+    result[key] = convertJsxElementToJson(jsxNode, topLevelScope, importsScope);
   }
-  if (node.type === 'ExportNamedDeclaration' && node.declaration && node.declaration.type === 'VariableDeclaration') {
-    const decls = node.declaration.declarations.filter((d) => !containsJsx(d.init));
-    if (decls.length === 0) return [];
-    return [{ ...node, declaration: { ...node.declaration, declarations: decls } }];
-  }
-  return [node];
-});
 
-const { code: evalSource } = generate.default ? generate.default(evalAst) : generate(evalAst);
-
-const { code: esmEvalCode } = transformSync(evalSource, {
-    plugins: [
-      ['@babel/plugin-transform-typescript', { isTSX: true }],
-  ],
-  // оставляем ESM модули нетронутыми
-  ast: false,
-  code: true,
-  sourceMaps: false,
-});
-
-// 4) Запишем во временный .mjs и динамически импортируем
-const projectRoot = process.cwd();
-const tmpDir = path.join(projectRoot, '.json-complex-tmp');
-fs.mkdirSync(tmpDir, { recursive: true });
-const tmpFile = path.join(tmpDir, 'module-eval.mjs');
-fs.writeFileSync(tmpFile, esmEvalCode, 'utf-8');
-
-const fileUrl = pathToFileURL(tmpFile).href;
-const runtimeModule = await import(fileUrl);
-
-// 5) Сформируем итоговый объект: все именованные экспорты + ui
-const result = {};
-for (const [key, value] of Object.entries(runtimeModule)) {
-  if (key === 'default' || key === '_expected' || key.startsWith('_')) continue;
-  result[key] = value;
+  return result;
 }
-// добавим все именованные JSX-экспорты (включая ui/notUI/block и т.п.)
-for (const [key, jsxNode] of Object.entries(namedJsxExports)) {
-  if (key === '_expected') continue;
-  result[key] = convertJsxElementToJson(jsxNode, topLevelScope, importsScope);
-}
-// export default -> ui, но не перезаписываем, если есть именованный ui
-if (ui !== undefined && result.ui === undefined) result.ui = ui;
-
-console.log(JSON.stringify(result, null, 2));
 

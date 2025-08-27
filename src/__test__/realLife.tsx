@@ -11,10 +11,9 @@ import {
   getBoolean,
   getNull,
   getUndefined,
-  // @ts-ignore
-} from './utils.js';
+} from './utils';
 import { Typography } from 'antd';
-import transformJsToJsonLogic from '../transformJsToJsonLogic/transformJsToJsonLogic.js';
+import { transformJsToJsonLogic } from '../transformJsToJsonLogic';
 
 export const name = 'realLife';
 export const description = 'Real life example';
@@ -30,7 +29,7 @@ const ternary = boolTrue ? 'yes' : 'no';
 const reveseTernary = !boolTrue ? 'yes' : 'no';
 
 const getAriaDescription = () => `${str} and ${str2}`;
-const concatString = (a, b) => `${a} ${b}`;
+const concatString = (a: string, b: string) => `${a} ${b}`;
 const getNowString = () => new Date('2025-08-25').toISOString();
 const title = concatString(str, concatString(str, str2));
 const ternaryNum = boolTrue ? num + 1 : num + 2;
@@ -40,7 +39,7 @@ const nested = concatString(concatString(str, str2), str);
 const component = <div aria-hidden={boolTrue}>hello</div>;
 const componentList = [<div>hello</div>, <div>{str2}</div>];
 const Сomponent = () => <div aria-hidden={boolTrue}>hello</div>;
-const СomponentProps = (props) => (
+const СomponentProps = (props: { text: string }) => (
   <div aria-hidden={boolTrue}>{props.text}</div>
 );
 

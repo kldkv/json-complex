@@ -1,0 +1,105 @@
+{
+  "name": "realLife",
+  "lastModified": "2025-08-27T21:04:01.255Z",
+  "description": "Real life example",
+  "ui": {
+    "component": "div",
+    "children": "ui"
+  },
+  "notUI": {
+    "component": "div",
+    "children": "notUI"
+  },
+  "block": {
+    "component": "div",
+    "props": {
+      "data-logic": {
+        "if": [
+          {
+            "var": "x"
+          },
+          "yes",
+          "no"
+        ]
+      },
+      "data-sum": 6,
+      "aria-hidden": true,
+      "draggable": false,
+      "aria-label": "hello and world",
+      "aria-description": "hello and world",
+      "role": "hello world",
+      "aria-disabled": true,
+      "aria-checked": "yes",
+      "aria-expanded": "no",
+      "aria-now": "2025-08-25T00:00:00.000Z",
+      "data-Component": {
+        "component": "div",
+        "props": {
+          "aria-hidden": true
+        },
+        "children": "hello"
+      },
+      "data-ComponentProps": {
+        "component": "div",
+        "props": {
+          "aria-hidden": true
+        },
+        "children": "world"
+      },
+      "aria-title": "hello hello world",
+      "data-ternary-num": 3,
+      "data-template": "hello2",
+      "aria-not": false,
+      "data-nested-call": "hello world hello",
+      "data-cond": "yes",
+      "data-string": "hello",
+      "data-number": 1,
+      "data-date-str": "Mon Aug 25 2025 03:00:00 GMT+0300 (Moscow Standard Time)",
+      "data-array": [1, 2, 3],
+      "data-object": {
+        "a": 1,
+        "b": 2
+      },
+      "data-bool": true,
+      "data-null": null,
+      "data-undef": null,
+      "data-component": {
+        "component": "div",
+        "props": {
+          "aria-hidden": true
+        },
+        "children": "hello"
+      },
+      "data-component-list": [
+        {
+          "component": "div",
+          "children": "hello"
+        },
+        {
+          "component": "div",
+          "children": "world"
+        }
+      ],
+      "data-full-component": {
+        "component": "div",
+        "props": {
+          "aria-hidden": true,
+          "draggable": false,
+          "aria-label": "hello and world"
+        },
+        "children": {
+          "component": "Typography",
+          "children": ["hello", 2]
+        }
+      }
+    },
+    "children": [
+      "hello",
+      2,
+      {
+        "component": "span",
+        "children": "text"
+      }
+    ]
+  }
+}
