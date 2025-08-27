@@ -13,7 +13,8 @@ import {
   getUndefined,
 } from './utils';
 import { Typography } from 'antd';
-import { transformJsToJsonLogic } from '../transformJsToJsonLogic';
+// @ts-expect-error: JS module without types is fine for tests
+import { transformJsToJsonLogic } from '../transformJsToJsonLogic/index.mjs';
 
 export const name = 'realLife';
 export const description = 'Real life example';
@@ -69,8 +70,8 @@ export const block = (
     aria-description={getAriaDescription()}
     role={concatString(str, str2)}
     aria-disabled={reverseFalse}
-    aria-checked={ternary}
-    aria-expanded={reveseTernary}
+    data-checked={ternary}
+    data-expanded={reveseTernary}
     aria-now={getNowString()}
     data-Component={<Сomponent />}
     data-ComponentProps={<СomponentProps text="world" />}
@@ -97,6 +98,61 @@ export const block = (
   </div>
 );
 
+// Дополнительные реальные сценарии
+export const listMap = (
+  <ul>
+    {['a', 'b'].map((x) => (
+      <li>{x}</li>
+    ))}
+  </ul>
+);
+
+export const conditionalChildren = (
+  <div>
+    {boolFalse && <span>hidden</span>}
+    {boolTrue && <span>shown</span>}
+  </div>
+);
+
+const maybeStr = (): string | undefined => (({}) as Record<string, string>).x;
+const maybeNull = (): string | null =>
+  (JSON.parse('{"x":null}') as any).x as string | null;
+
+export const nullish = <div data-x={maybeStr() ?? 'fallback'} />;
+
+export const optional = <div data-a={(getObject() as any).c?.d ?? 'none'} />;
+
+export const methodCall = (
+  <div data-trim={'  hi  '.trim()} data-slice={str.slice(1, 3)} />
+);
+
+export const jsxMember = <Typography.Text strong>{str2}</Typography.Text>;
+
+export const dataAccess = (
+  <div data-obj-a={getObject().a} data-arr-item={[10, 20, 30][1]} />
+);
+
+export const newDateIso = (
+  <time data-iso={new Date('2025-01-01').toISOString()} />
+);
+
+export const spreadIgnored = <div {...{ 'data-a': 1 }} data-b={2} />;
+
+export const opChecks = (
+  <div
+    data-in={'a' in { a: 1 }}
+    data-instance={new Date('2025-01-01') instanceof Date}
+  />
+);
+
+export const logics = (
+  <div
+    data-and={boolTrue && 'Y'}
+    data-or={boolFalse || 'X'}
+    data-nv={maybeNull() ?? 'N'}
+  />
+);
+
 export const _expected = {
   name: 'realLife',
   description: 'Real life example',
@@ -119,8 +175,8 @@ export const _expected = {
       'aria-label': 'hello and world',
       'aria-description': 'hello and world',
       'aria-disabled': true,
-      'aria-checked': 'yes',
-      'aria-expanded': 'no',
+      'data-checked': 'yes',
+      'data-expanded': 'no',
       'aria-now': '2025-08-25T00:00:00.000Z',
       'data-component': {
         component: 'div',
@@ -176,5 +232,53 @@ export const _expected = {
         children: 'text',
       },
     ],
+  },
+  listMap: {
+    component: 'ul',
+    children: [
+      { component: 'li', children: 'a' },
+      { component: 'li', children: 'b' },
+    ],
+  },
+  conditionalChildren: {
+    component: 'div',
+    children: { component: 'span', children: 'shown' },
+  },
+  nullish: {
+    component: 'div',
+    props: { 'data-x': 'fallback' },
+  },
+  optional: {
+    component: 'div',
+    props: { 'data-a': 'none' },
+  },
+  methodCall: {
+    component: 'div',
+    props: { 'data-trim': 'hi', 'data-slice': 'el' },
+  },
+  jsxMember: {
+    component: 'Typography.Text',
+    props: { strong: true },
+    children: 'world',
+  },
+  dataAccess: {
+    component: 'div',
+    props: { 'data-obj-a': 1, 'data-arr-item': 20 },
+  },
+  newDateIso: {
+    component: 'time',
+    props: { 'data-iso': '2025-01-01T00:00:00.000Z' },
+  },
+  spreadIgnored: {
+    component: 'div',
+    props: { 'data-b': 2 },
+  },
+  opChecks: {
+    component: 'div',
+    props: { 'data-in': true, 'data-instance': true },
+  },
+  logics: {
+    component: 'div',
+    props: { 'data-and': 'Y', 'data-or': 'X', 'data-nv': 'N' },
   },
 };

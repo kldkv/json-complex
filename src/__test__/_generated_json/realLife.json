@@ -1,6 +1,6 @@
 {
   "name": "realLife",
-  "lastModified": "2025-08-27T21:04:01.255Z",
+  "lastModified": "2025-08-27T22:58:31.485Z",
   "description": "Real life example",
   "ui": {
     "component": "div",
@@ -29,8 +29,8 @@
       "aria-description": "hello and world",
       "role": "hello world",
       "aria-disabled": true,
-      "aria-checked": "yes",
-      "aria-expanded": "no",
+      "data-checked": "yes",
+      "data-expanded": "no",
       "aria-now": "2025-08-25T00:00:00.000Z",
       "data-Component": {
         "component": "div",
@@ -101,5 +101,85 @@
         "children": "text"
       }
     ]
+  },
+  "listMap": {
+    "component": "ul",
+    "children": [
+      {
+        "component": "li",
+        "children": "a"
+      },
+      {
+        "component": "li",
+        "children": "b"
+      }
+    ]
+  },
+  "conditionalChildren": {
+    "component": "div",
+    "children": {
+      "component": "span",
+      "children": "shown"
+    }
+  },
+  "nullish": {
+    "component": "div",
+    "props": {
+      "data-x": "fallback"
+    }
+  },
+  "optional": {
+    "component": "div",
+    "props": {
+      "data-a": "none"
+    }
+  },
+  "methodCall": {
+    "component": "div",
+    "props": {
+      "data-trim": "hi",
+      "data-slice": "el"
+    }
+  },
+  "jsxMember": {
+    "component": "Typography.Text",
+    "props": {
+      "strong": true
+    },
+    "children": "world"
+  },
+  "dataAccess": {
+    "component": "div",
+    "props": {
+      "data-obj-a": 1,
+      "data-arr-item": 20
+    }
+  },
+  "newDateIso": {
+    "component": "time",
+    "props": {
+      "data-iso": "2025-01-01T00:00:00.000Z"
+    }
+  },
+  "spreadIgnored": {
+    "component": "div",
+    "props": {
+      "data-b": 2
+    }
+  },
+  "opChecks": {
+    "component": "div",
+    "props": {
+      "data-in": true,
+      "data-instance": true
+    }
+  },
+  "logics": {
+    "component": "div",
+    "props": {
+      "data-and": "Y",
+      "data-or": "X",
+      "data-nv": "N"
+    }
   }
 }
