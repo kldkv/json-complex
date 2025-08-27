@@ -14,6 +14,7 @@ import {
   // @ts-ignore
 } from './utils.js';
 import { Typography } from 'antd';
+import transformJsToJsonLogic from '../transformJsToJsonLogic/transformJsToJsonLogic.js';
 
 export const name = 'realLife';
 export const description = 'Real life example';
@@ -61,6 +62,7 @@ export const notUI = <div>notUI</div>;
 
 export const block = (
   <div
+    data-logic={transformJsToJsonLogic("x ? 'yes' : 'no'")}
     data-sum={sum}
     aria-hidden={boolTrue}
     draggable={boolFalse}
@@ -110,6 +112,9 @@ export const _expected = {
   block: {
     component: 'div',
     props: {
+      'data-logic': {
+        if: [{ var: 'x' }, 'yes', 'no'],
+      },
       'data-sum': 6,
       'aria-hidden': true,
       'aria-label': 'hello and world',

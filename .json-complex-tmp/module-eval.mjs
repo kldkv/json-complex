@@ -34,6 +34,11 @@ export const _expected = {
   block: {
     component: 'div',
     props: {
+      'data-logic': {
+        if: [{
+          var: 'x'
+        }, 'yes', 'no']
+      },
       'data-sum': 6,
       'aria-hidden': true,
       'aria-label': 'hello and world',
