@@ -7,11 +7,11 @@
   "scripts": {
     "build": "vite build",
     "test": "vitest",
-    "cli": "node ./src/cli.js",
-    "cli:watch": "node ./src/cli.js -w"
+    "cli": "node ./src/cli.mjs",
+    "cli:watch": "node ./src/cli.mjs -w"
   },
   "bin": {
-    "jsx-json-logic": "./src/cli.js"
+    "jsx-json-logic": "./src/cli.mjs"
   },
   "keywords": [],
   "author": "Alexander Kladkov (kldkv)",
