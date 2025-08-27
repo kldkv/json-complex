@@ -144,7 +144,7 @@ export const render = (
           if (keyLower !== 'children' && PROPS_FOR_PURGE_SET.has(key)) {
             return undefined;
           }
-          
+
           // Санитизация URL-подобных пропсов на этапе парсинга
           if (typeof value === 'string') {
             if (URL_SINGLE_KEYS.has(keyLower)) {

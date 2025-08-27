@@ -8,6 +8,7 @@ import {
   getNull,
   getUndefined,
 } from './utils';
+import * as R from 'remeda';
 
 const str = 'hello';
 const str2 = 'world';
@@ -21,7 +22,7 @@ const reveseTernary = !boolTrue ? 'yes' : 'no';
 
 const getAriaDescription = () => `${str} and ${str2}`;
 const concatString = (a, b) => `${a} ${b}`;
-const getNowString = () => new Date('2025-08-25').toLocaleString();
+const getNowString = () => new Date('2025-08-25').toISOString();
 const title = concatString(str, concatString(str, str2));
 const ternaryNum = boolTrue ? num + 1 : num + 2;
 const tmpl = `${str}${num}`;
@@ -38,9 +39,13 @@ const fullComponent = (
     {str} {num}
   </div>
 );
+const sum = R.sum([1, 2, 3]);
+
+export const name = 'placeholder-child-const';
 
 export const jsx = (
   <div
+    data-sum={sum}
     aria-hidden={boolTrue}
     draggable={boolFalse}
     aria-label={`${str} and ${str2}`}
@@ -78,13 +83,14 @@ export const jsx = (
 export const expected = {
   component: 'div',
   props: {
+    'data-sum': 6,
     'aria-hidden': true,
     'aria-label': 'hello and world',
     'aria-description': 'hello and world',
     'aria-disabled': true,
     'aria-checked': 'yes',
     'aria-expanded': 'no',
-    'aria-now': '2025-08-25 00:00:00',
+    'aria-now': '2025-08-25T00:00:00.000Z',
     role: 'hello world',
     draggable: false,
     'aria-title': 'hello hello world',
@@ -145,4 +151,3 @@ export const expected = {
   ],
 };
 
-export const name = 'placeholder-child-const';
